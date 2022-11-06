@@ -4,6 +4,7 @@ import sqlite3
 import logging
 import copy
 import itertools
+import time
 
 logging.basicConfig(level=logging.INFO)
 # logging.basicConfig(level=logging.DEBUG)
@@ -33,7 +34,8 @@ def powerset(superset):
 
 
 class Graph():
-    # TODO - Schreibe Attacksets in datenbank
+    # TODO - Second round to remove empty attacksets:
+    #       for pokemon with empty sets Identify evolutions, merge pokemon and rerun creation of attacksets
 
     def __init__(self, generation):
         self.generation = generation
@@ -42,7 +44,7 @@ class Graph():
 
     def minimize_attack_sets(self):
         for pokemon in self.pokemon:
-            logging.info("Compute attacksets for %s...", pokemon)
+            logging.info("Compute attacksets for %s %s...", (str(pokemon.number), pokemon))
             potential_attacksets = powerset(pokemon.all_attacks)
             pot_attackset_iterator = list(copy.deepcopy(potential_attacksets))
 
@@ -132,10 +134,15 @@ class Graph():
             pokemon_group = p1.name
             pokemon_group_number = str(p1.number)
             for p2 in pokemons[p1.number:]:
-
-                if p1.all_attacks == p2.all_attacks:
+                # TODO - gen2 does not merge pokemon, gen3 takes ages
+                if p1.all_attacks.issubset(p2.all_attacks):
                     pokemon_group += "/" + p2.name
                     pokemon_group_number += "/" + str(p2.number)
+                    p1.all_attacks = p1.all_attacks.union(p2.all_attacks)
+                elif p2.all_attacks.issubset(p1.all_attacks):
+                    pokemon_group += "/" + p2.name
+                    pokemon_group_number += "/" + str(p2.number)
+                    p1.all_attacks = p1.all_attacks.union(p2.all_attacks)
 
             p1.name = pokemon_group
             p1.number = pokemon_group_number
@@ -194,7 +201,7 @@ class Graph():
             self.number = entry[0]
             self.counter = entry[0]
             self.name = entry[1]
-            self.attacksets = []
+            self.attacksets = {}
             self.all_attacks = entry[2]
             self.edges = dict()  # {pokemon: {attack: Edge}}
 
@@ -246,23 +253,78 @@ class Graph():
             if not self.edges[other]:
                 del self.edges[other]
 
+        def return_attacksets(self):
+            attacksets_string = ""
+            for attackset in list(self.attacksets):
+                attacksets_string += str(set(attackset)) + ","
+            return attacksets_string[:-1]
+
+        def print_attacksets(self):
+            print(self.name + ": " + self.return_attacksets())
+
+        def return_attacks(self):
+            attacks_string = ""
+            for attack in list(self.all_attacks):
+                attacks_string += attack + ","
+            return attacks_string[:-1]
+
+        def print_attacks(self):
+            print(self.name + ": " + self.return_attacks())
+
 
 def createTable(tablename="pokemon_attacksets", db_name="pokemon.db"):
     db = sqlite3.connect(db_name)
     cursor = db.cursor()
     cursor.execute("CREATE TABLE IF NOT EXISTS " + tablename +
-                   "(NUMBER int, NAME_GER text, ATTACKS_GER text, ATTACKSETS_GER text, NAME_ENG text, ATTACKS_ENG text, ATTACKSETS_ENG text, NAME_JAP text, ATTACKS_JAP text, ATTACKSETS_JAP text, GEN text)")
+                   "(NUMBER text, NAME_GER text, ATTACKS_GER text, ATTACKSETS_GER text, NAME_ENG text, ATTACKS_ENG text, ATTACKSETS_ENG text, NAME_JAP text, ATTACKS_JAP text, ATTACKSETS_JAP text, GEN text)")
     db.commit()
     db.close()
     return None
 
 
+def populate_db_table_with_attacksets(pokegraph, tablename="pokemon_attacksets", db_name="pokemon.db"):
+    db = sqlite3.connect(db_name)
+    cursor = db.cursor()
+    for pokemon in pokegraph.pokemon:
+        cursor.execute("INSERT INTO " + tablename + " (NUMBER, NAME_GER, ATTACKS_GER, ATTACKSETS_GER, GEN) VALUES(?,?,?,?,?)", (str(pokemon.number), pokemon.name, str(pokemon.all_attacks), str(pokemon.attacksets), pokegraph.generation))
+    db.commit()
+    db.close()
 
-# for row in pokemon_list:
-#     print(row.name)
 
+# Testing and Debugging
+
+# pokegraph = Graph("1. Generation")
+# pokegraph.minimize_attack_sets()
+
+# Create table
+# createTable()
+
+# Print for debugging
+# for pokemon in pokegraph.pokemon:
+#     pokemon.print_attacks()
+#     pokemon.print_attacksets()
+
+# Populate table
+# populate_db_table_with_attacksets(pokegraph)
+
+# Productive run
+
+# Create table
+createTable()
+
+duration = dict()
+for generation in GENERATIONS:
+
+    # create graph
+    pokegraph = Graph(generation)
+    start = time.time()
+    pokegraph.minimize_attack_sets()
+    end = time.time()
+
+    duration[generation] = end-start
+
+    # populate table
+    populate_db_table_with_attacksets(pokegraph)
 
 for generation in GENERATIONS:
-    # pokegraph = Graph("1. Generation")
-    pokegraph = Graph("1. Generation")
-    pokegraph.minimize_attack_sets()
+    print(generation, "took", str(duration[generation], "seconds."))
