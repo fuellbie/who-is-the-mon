@@ -11,14 +11,14 @@ logging.basicConfig(level=logging.INFO)
 
 GENERATIONS = [
         "1. Generation",
-        "2. Generation",
-        "3. Generation",
-        "4. Generation",
-        "5. Generation",
-        "5. Generation",
-        "6. Generation",
-        "7. Generation",
-        "8. Generation"
+        # "2. Generation",
+        # "3. Generation",
+        # "4. Generation",
+        # "5. Generation",
+        # "5. Generation",
+        # "6. Generation",
+        # "7. Generation",
+        # "8. Generation"
         ]
 
 
@@ -34,8 +34,6 @@ def powerset(superset):
 
 
 class Graph():
-    # TODO - Second round to remove empty attacksets:
-    #       for pokemon with empty sets Identify evolutions, merge pokemon and rerun creation of attacksets
 
     def __init__(self, generation):
         self.generation = generation
@@ -43,8 +41,11 @@ class Graph():
         self.edges = self.create_edges()  # dict {uuid: edge}
 
     def minimize_attack_sets(self):
+        #TODO - Not working correctly: Wiesor and Wiesenior both have (Slam, Erholung)
+        # Arktos has (Eisstrahl)
+        # Do we have wrong edges?
         for pokemon in self.pokemon:
-            logging.info("Compute attacksets for %s %s...", (str(pokemon.number), pokemon))
+            logging.info("Compute attacksets for %s %s...", str(pokemon.number), pokemon)
             potential_attacksets = powerset(pokemon.all_attacks)
             pot_attackset_iterator = list(copy.deepcopy(potential_attacksets))
 
@@ -105,7 +106,7 @@ class Graph():
         db.close()
         pokemons = []
         for row in rows:
-            pokemons.append(Graph.Pokemon(self.merge_attacks(row)))
+            pokemons.append(Graph.Pokemon(self.merge_attacks(row)))  # TODO - consider removing merge_attacks
         return self.merge_pokemon(pokemons)
 
     def merge_attacks(self, row):
@@ -127,27 +128,29 @@ class Graph():
 
         pokemon_group = ""
         pokemon_group_number = ""
-        counter = 1
+        start_number = pokemons[0].number
+
         for p1 in pokemons:
             if p1.name in pokemon_group:
                 continue
             pokemon_group = p1.name
             pokemon_group_number = str(p1.number)
-            for p2 in pokemons[p1.number:]:
-                # TODO - gen2 does not merge pokemon, gen3 takes ages
-                if p1.all_attacks.issubset(p2.all_attacks):
-                    pokemon_group += "/" + p2.name
-                    pokemon_group_number += "/" + str(p2.number)
-                    p1.all_attacks = p1.all_attacks.union(p2.all_attacks)
-                elif p2.all_attacks.issubset(p1.all_attacks):
+            p1.counter = int(p1.number) - start_number + 1
+            for p2 in pokemons[p1.counter:]:
+
+                # EXCEPTIONS
+                # Ignore Rabauz in Gen 2
+                if p2.name == "Rabauz":
+                    continue
+
+                if p1.all_attacks.issubset(p2.all_attacks) or p2.all_attacks.issubset(p1.all_attacks):
+                    # Merge
                     pokemon_group += "/" + p2.name
                     pokemon_group_number += "/" + str(p2.number)
                     p1.all_attacks = p1.all_attacks.union(p2.all_attacks)
 
             p1.name = pokemon_group
             p1.number = pokemon_group_number
-            p1.counter = counter
-            counter += 1
             new_pokemon_list.append(p1)
         return new_pokemon_list
 
@@ -323,8 +326,13 @@ for generation in GENERATIONS:
 
     duration[generation] = end-start
 
+    # Print for debugging
+    for pokemon in pokegraph.pokemon:
+        pokemon.print_attacks()
+        pokemon.print_attacksets()
+
     # populate table
     populate_db_table_with_attacksets(pokegraph)
 
 for generation in GENERATIONS:
-    print(generation, "took", str(duration[generation], "seconds."))
+    print(generation, "took", str(duration[generation]), "seconds.")
