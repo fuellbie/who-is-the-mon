@@ -133,5 +133,56 @@ def init_raw_table(start_pokemon=None):
     return None
 
 
+def reduce_attacks_evol(tablename="pokemon_raw_n", db_name="pokemon.db"):
+    """
+    Only allow attacks which exist in prior pokemon evolutions
+    """
+
+    db = sqlite3.connect(db_name)
+    cursor = db.cursor()
+    cursor.execute(
+        "SELECT * FROM " + tablename
+    )
+    rows = cursor.fetchall()
+    db.close()
+
+    for index in range(len(rows)):
+        if rows[index][3]:
+            rows[index] = reduce_attacks(index, rows)
+    print(rows)
+
+    print(rows[11])
+    for index in range(len(rows)):
+        if rows[index][3]:
+            print(rows[index][0])
+            print(rows[index])
+            db = sqlite3.connect(db_name)
+            cursor = db.cursor()
+            cursor.execute(
+                "UPDATE " + tablename + " SET ATTACKS_EVOL = ? WHERE NUMBER = ?", (rows[index][3], rows[index][0])
+            )
+            db.commit()
+            db.close()
+
+
+def reduce_attacks(index, rows):
+    """
+    Removes attacks from attacks_evol which are not present in attack from row before
+    """
+    attacks = list(set(rows[index][3].split(",")))
+    for attack in list(rows[index][3].split(",")):
+        if attack not in rows[index-1][2] + "," + rows[index-1][3]:
+            try:
+                attacks.remove(attack)
+            except ValueError:
+                pass
+    row = list(rows[index])
+    row[3] = ",".join(attacks)
+    return tuple(row)
+
+
+
+
 # init_raw_table()
 # createTable(tablename="pokemon_raw_n")
+reduce_attacks_evol()
