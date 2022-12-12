@@ -22,6 +22,8 @@ GENERATIONS = [
     "8. Generation",
 ]
 
+ATTACK_LIMIT = 17
+
 
 class CustomError(Exception):
     pass
@@ -36,7 +38,7 @@ def powerset(superset):
                 "Create all attacksets... " + str(int(k / len(superset) * 100)) + "%",
                 end="\r",
             )
-        result = result.union(set(itertools.combinations(superset, k)))
+        result = result.union(set(itertools.combinations(set(superset), k)))
     return result
 
 
@@ -46,6 +48,21 @@ def in_list(name, pokemon_list):
             if name == pokemon_name:
                 return True
     return False
+
+
+def divide_and_conquer(all_attacks_original: set) -> list[list]:
+    # Divide and Conquer if too many attacks
+    all_attacks_original = list(all_attacks_original)
+    quotient = int(len(all_attacks_original) / ATTACK_LIMIT)
+    all_attacks = []
+    for k in range(quotient + 1):
+        all_attacks.append(list())
+
+    for k in range(len(all_attacks_original)):
+        slot = k % (quotient + 1)
+        all_attacks[slot].append(all_attacks_original[k])
+
+    return all_attacks
 
 
 class Graph:
@@ -60,104 +77,140 @@ class Graph:
         for pokemon in self.pokemon:
 
             # EXCEPTION - Ignore Attacksets
-            if pokemon.name in ("Riolu/Lucario"):
-                continue
+            # if pokemon.name in ("Riolu/Lucario"):
+            #     continue
 
             logging.info(
                 "Compute attacksets for %s %s...", str(pokemon.number), pokemon
             )
-            potential_attacksets = powerset(pokemon.all_attacks)
-            # pot_attackset_iterator = powerset(pokemon.all_attacks)
 
-            # Copy attackset
-            print("Copy attackset ... ", end="\r")
-            pot_attackset_iterator = list(copy.deepcopy(potential_attacksets))
-            sys.stdout.flush()
-            print("Copy attackset ... Done", end="\r")
-            sys.stdout.flush()
+            all_attacks = divide_and_conquer(pokemon.all_attacks)
 
-            # Find unique attackets
-            counter = 0
-            print("Find unique attacksets... 0%", end="\r")
-            sys.stdout.flush()
-            for attackset in pot_attackset_iterator:
-                counter += 1
-                if counter / len(pot_attackset_iterator) * 100 % 1 == 0:
-                    print(
-                        "Find unique attacksets... "
-                        + str(int(counter / len(pot_attackset_iterator) * 100))
-                        + "%",
-                        end="\r",
-                    )
-                if not pokemon.is_unique(attackset):
-                    potential_attacksets.remove(attackset)
+            attack_counter = 0
+            for attacks in all_attacks:
+                attack_counter += 1
+                # logging.info("%s parts", str(len(all_attacks)))
 
-            sys.stdout.flush()
+                potential_attacksets = powerset(attacks)
+                # pot_attackset_iterator = powerset(pokemon.all_attacks)
 
-            # Copy attackset
-            print("Copy attackset ... ", end="\r")
-            pot_attackset_iterator = list(copy.deepcopy(potential_attacksets))
-            sys.stdout.flush()
-            print("Copy attackset ... Done", end="\r")
-            sys.stdout.flush()
+                # Copy attackset
+                print("Copy attackset ... ", end="\r")
+                pot_attackset_iterator = list(copy.deepcopy(potential_attacksets))
+                sys.stdout.flush()
+                print("Copy attackset ... Done", end="\r")
+                sys.stdout.flush()
 
-            # Reduce attacksets
-            counter = 0
-            length = int((len(pot_attackset_iterator) ** 2) / 2)
-            print("Reduce attacksets... 0% - " + str(length) + "            ", end="\r")
-            print("Reduce attacksets... 0% -                  ", end="\r")
-            sys.stdout.flush()
-            removed = set()  # Collect index of removed attackset
-            for a1 in range(len(pot_attackset_iterator)):
-                if a1 in removed:
-                    counter += len(pot_attackset_iterator) - a1
-                    continue
-                for a2 in range(a1, len(pot_attackset_iterator)):
+                # Find unique attackets
+                counter = 0
+                print("Find unique attacksets... 0%", end="\r")
+                sys.stdout.flush()
+                for attackset in pot_attackset_iterator:
                     counter += 1
-                    if counter / length * 100 % 1 == 0:
+                    if counter / len(pot_attackset_iterator) * 100 % 1 == 0:
                         print(
-                            "Reduce attacksets... "
-                            + str(int((counter / length) * 100))
-                            + "% - "
-                            + str(length-counter)
-                            + "        ",
+                            "Find unique attacksets... "
+                            + str(int(counter / len(pot_attackset_iterator) * 100))
+                            + "%",
                             end="\r",
                         )
-                    if a2 in removed or a1 == a2:
-                        continue
-                    if set(pot_attackset_iterator[a2]).issubset(
-                        set(pot_attackset_iterator[a1])
-                    ):
-                        potential_attacksets.remove(pot_attackset_iterator[a1])
-                        removed.add(a1)
-                        counter += len(pot_attackset_iterator) - a2
-                        print(
-                            "Reduce attacksets... "
-                            + str(int((counter / length) * 100))
-                            + "% - "
-                            + str(length-counter)
-                            + "        ",
-                            end="\r",
-                        )
-                        break
-                    elif set(pot_attackset_iterator[a1]).issubset(
-                        set(pot_attackset_iterator[a2])
-                    ):
-                        potential_attacksets.remove(pot_attackset_iterator[a2])
-                        removed.add(a2)
-                        counter += len(pot_attackset_iterator) - a2
-                        print(
-                            "Reduce attacksets... "
-                            + str(int((counter / length) * 100))
-                            + "% - "
-                            + str(length - counter)
-                            + "        ",
-                            end="\r",
-                        )
-                        break
-            sys.stdout.flush()
+                    if not pokemon.is_unique(attackset):
+                        potential_attacksets.remove(attackset)
 
-            pokemon.attacksets = potential_attacksets
+                sys.stdout.flush()
+
+                # Copy attackset
+                print("Copy attackset ... ", end="\r")
+                pot_attackset_iterator = list(copy.deepcopy(potential_attacksets))
+                sys.stdout.flush()
+                print("Copy attackset ... Done", end="\r")
+                sys.stdout.flush()
+
+                # Reduce attacksets
+                counter = 0
+                length = int((len(pot_attackset_iterator) ** 2) / 2)
+                print(
+                    "Reduce attacksets "
+                    + str(attack_counter)
+                    + "/"
+                    + str(len(all_attacks))
+                    + " ... 0% - "
+                    + str(length)
+                    + "            ",
+                    end="\r",
+                )
+                print(
+                    "Reduce attacksets "
+                    + str(attack_counter)
+                    + "/"
+                    + str(len(all_attacks))
+                    + " ... 0% -                  ",
+                    end="\r",
+                )
+                sys.stdout.flush()
+                removed = set()  # Collect index of removed attackset
+                for a1 in range(len(pot_attackset_iterator)):
+                    if a1 in removed:
+                        counter += len(pot_attackset_iterator) - a1
+                        continue
+                    for a2 in range(a1, len(pot_attackset_iterator)):
+                        counter += 1
+                        if counter / length * 100 % 1 == 0:
+                            print(
+                                "Reduce attacksets "
+                                + str(attack_counter)
+                                + "/"
+                                + str(len(all_attacks))
+                                + " ... "
+                                + str(int((counter / length) * 100))
+                                + "% - "
+                                + str(length - counter)
+                                + "        ",
+                                end="\r",
+                            )
+                        if a2 in removed or a1 == a2:
+                            continue
+                        if set(pot_attackset_iterator[a2]).issubset(
+                            set(pot_attackset_iterator[a1])
+                        ):
+                            potential_attacksets.remove(pot_attackset_iterator[a1])
+                            removed.add(a1)
+                            counter += len(pot_attackset_iterator) - a2
+                            print(
+                                "Reduce attacksets "
+                                + str(attack_counter)
+                                + "/"
+                                + str(len(all_attacks))
+                                + " ... "
+                                + str(int((counter / length) * 100))
+                                + "% - "
+                                + str(length - counter)
+                                + "        ",
+                                end="\r",
+                            )
+                            break
+                        elif set(pot_attackset_iterator[a1]).issubset(
+                            set(pot_attackset_iterator[a2])
+                        ):
+                            potential_attacksets.remove(pot_attackset_iterator[a2])
+                            removed.add(a2)
+                            counter += len(pot_attackset_iterator) - a2
+                            print(
+                                "Reduce attacksets "
+                                + str(attack_counter)
+                                + "/"
+                                + str(len(all_attacks))
+                                + " ... "
+                                + str(int((counter / length) * 100))
+                                + "% - "
+                                + str(length - counter)
+                                + "        ",
+                                end="\r",
+                            )
+                            break
+                sys.stdout.flush()
+
+                pokemon.attacksets = pokemon.attacksets.union(potential_attacksets)
         return None
 
     def create_edges(self):
@@ -360,7 +413,7 @@ class Graph:
             self.number = entry[0]
             self.counter = entry[0]
             self.name = entry[1]
-            self.attacksets = {}
+            self.attacksets = set()
             self.all_attacks = entry[2]
             self.edges = dict()  # {pokemon: {attack: Edge}}
 
